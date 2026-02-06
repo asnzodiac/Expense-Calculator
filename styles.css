@@ -52,6 +52,11 @@ th {
     background: #f2f2f2;
 }
 
+tr.sub {
+    font-style: italic;
+    background: #f9f9f9;
+}
+
 .highlight {
     color: red;
     font-weight: bold;
