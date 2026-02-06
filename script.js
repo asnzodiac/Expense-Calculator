@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseTableBody = document.querySelector('#expenseTable tbody');
     const totalSpendSpan = document.getElementById('totalSpend');
     const highlightsDiv = document.getElementById('highlights');
+    const categorySelect = document.getElementById('category');
+    const remarkLabel = document.getElementById('remarkLabel');
+    const remarkInput = document.getElementById('remark');
 
     let currentMonth = getCurrentMonth();
     let expenses = loadExpenses();
@@ -15,6 +18,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load initial data
     loadMonthData(currentMonth);
 
+    // Show/hide remark field based on category
+    categorySelect.addEventListener('change', () => {
+        if (categorySelect.value === 'other') {
+            remarkLabel.style.display = 'block';
+            remarkInput.style.display = 'block';
+            remarkInput.required = true;
+        } else {
+            remarkLabel.style.display = 'none';
+            remarkInput.style.display = 'none';
+            remarkInput.required = false;
+        }
+    });
+
     // Change month event
     monthSelect.addEventListener('change', (e) => {
         currentMonth = e.target.value;
@@ -24,20 +40,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add expense
     expenseForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const category = document.getElementById('category').value;
+        const category = categorySelect.value;
         const amount = parseFloat(document.getElementById('amount').value);
+        const remark = remarkInput.value;
 
         if (!expenses[currentMonth]) {
             expenses[currentMonth] = {};
         }
-        if (!expenses[currentMonth][category]) {
-            expenses[currentMonth][category] = 0;
+
+        if (category === 'other') {
+            if (!expenses[currentMonth].other) {
+                expenses[currentMonth].other = [];
+            }
+            expenses[currentMonth].other.push({ amount, remark });
+        } else {
+            if (!expenses[currentMonth][category]) {
+                expenses[currentMonth][category] = 0;
+            }
+            expenses[currentMonth][category] += amount;
         }
-        expenses[currentMonth][category] += amount;
 
         saveExpenses(expenses);
         loadMonthData(currentMonth);
         expenseForm.reset();
+        // Reset remark visibility
+        remarkLabel.style.display = 'none';
+        remarkInput.style.display = 'none';
+        remarkInput.required = false;
     });
 
     function getCurrentMonth() {
@@ -72,31 +101,57 @@ document.addEventListener('DOMContentLoaded', () => {
         highlightsDiv.innerHTML = '';
         let total = 0;
         const monthData = expenses[month] || {};
-        const categories = Object.keys(monthData);
+        const categoryAmounts = {};
 
-        // Sort categories by amount descending for highlighting
-        categories.sort((a, b) => monthData[b] - monthData[a]);
+        // Calculate amounts for non-other categories
+        Object.keys(monthData).forEach(cat => {
+            if (cat !== 'other') {
+                const amt = monthData[cat];
+                categoryAmounts[cat] = amt;
+                total += amt;
+            }
+        });
 
-        categories.forEach(category => {
-            const amount = monthData[category];
-            total += amount;
+        // Calculate other total
+        let otherTotal = 0;
+        if (monthData.other) {
+            otherTotal = monthData.other.reduce((sum, entry) => sum + entry.amount, 0);
+            categoryAmounts['other'] = otherTotal;
+            total += otherTotal;
+        }
 
+        // Sort categories by amount descending
+        const categories = Object.keys(categoryAmounts).sort((a, b) => categoryAmounts[b] - categoryAmounts[a]);
+
+        // Display rows
+        categories.forEach(cat => {
+            const amt = categoryAmounts[cat];
             const row = document.createElement('tr');
-            row.innerHTML = `<td>${category.replace('_', ' ')}</td><td>${amount.toFixed(2)}</td>`;
+            row.innerHTML = `<td>${cat.replace('_', ' ')}</td><td>${amt.toFixed(2)}</td>`;
             expenseTableBody.appendChild(row);
+
+            // Add sub-rows for other
+            if (cat === 'other' && monthData.other) {
+                monthData.other.forEach(entry => {
+                    const subRow = document.createElement('tr');
+                    subRow.classList.add('sub');
+                    subRow.innerHTML = `<td colspan="2"> - ${entry.remark}: ${entry.amount.toFixed(2)}</td>`;
+                    expenseTableBody.appendChild(subRow);
+                });
+            }
         });
 
         totalSpendSpan.textContent = total.toFixed(2);
 
-        // Highlight top 2 spends (or adjust threshold)
+        // Highlight top 2 spends
         if (categories.length > 0) {
             highlightsDiv.innerHTML = '<h3>High Spending Areas:</h3>';
             for (let i = 0; i < Math.min(2, categories.length); i++) {
-                const category = categories[i];
-                const amount = monthData[category];
+                const cat = categories[i];
+                const amt = categoryAmounts[cat];
                 const p = document.createElement('p');
                 p.classList.add('highlight');
-                p.textContent = `${category.replace('_', ' ')}: ${amount.toFixed(2)} (High!)`;
+                p.textContent = `${cat.replace('_', ' ')}: ${amt.toFixed(2)} (High!)`;
                 highlightsDiv.appendChild(p);
             }
         }
